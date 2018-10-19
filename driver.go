@@ -175,7 +175,7 @@ func (c zConn) ExecContext(ctx context.Context, query string, args []driver.Name
 		span, _ := c.tracer.StartSpanFromContext(ctx, "sql/exec")
 		defer span.Finish()
 
-		if c.options.Query {
+		if c.options.TagQuery {
 			span.Tag("sql.query", query)
 		}
 
@@ -209,7 +209,7 @@ func (c zConn) QueryContext(ctx context.Context, query string, args []driver.Nam
 		span, _ := c.tracer.StartSpanFromContext(ctx, "sql/exec")
 		defer span.Finish()
 
-		if c.options.Query {
+		if c.options.TagQuery {
 			span.Tag("sql.query", query)
 		}
 
@@ -293,7 +293,7 @@ type zResult struct {
 }
 
 func (r zResult) LastInsertId() (int64, error) {
-	if !r.options.LastInsertID {
+	if !r.options.LastInsertIDSpan {
 		return r.driver.LastInsertId()
 	}
 
@@ -310,7 +310,7 @@ func (r zResult) LastInsertId() (int64, error) {
 
 func (r zResult) RowsAffected() (cnt int64, err error) {
 	zipkin.SpanFromContext(r.ctx)
-	if r.options.RowsAffected && zipkin.SpanFromContext(r.ctx) != nil {
+	if r.options.RowsAffectedSpan && zipkin.SpanFromContext(r.ctx) != nil {
 		span, _ := r.tracer.StartSpanFromContext(r.ctx, "sql/rows_affected")
 		setSpanDefaultTags(span, r.options.DefaultTags)
 		defer func() {
@@ -359,7 +359,7 @@ func (s zStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res d
 		span.Finish()
 	}()
 
-	if s.options.Query {
+	if s.options.TagQuery {
 		span.Tag("sql.query", s.query)
 	}
 
@@ -370,6 +370,13 @@ func (s zStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res d
 	if err != nil {
 		return nil, err
 	}
+
+	if s.options.TagAffectedRows {
+		if affectedRows, err := res.RowsAffected(); err != nil {
+			span.Tag("sql.affected_rows", fmt.Sprintf("%d", affectedRows))
+		}
+	}
+
 	res, err = zResult{driver: res, ctx: ctx, options: s.options}, nil
 	return
 }
@@ -385,7 +392,7 @@ func (s zStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (rows
 		span.Finish()
 	}()
 
-	if s.options.Query {
+	if s.options.TagQuery {
 		span.Tag("sql.query", s.query)
 	}
 
@@ -402,6 +409,7 @@ func (s zStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (rows
 	if err != nil {
 		return nil, err
 	}
+
 	rows, err = zRows{driver: rows, ctx: ctx, options: s.options}, nil
 	return
 }

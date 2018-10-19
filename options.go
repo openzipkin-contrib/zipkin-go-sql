@@ -4,22 +4,24 @@ package zipkinsql
 type TraceOption func(o *TraceOptions)
 
 // TraceOptions holds configuration of our zipkinsql tracing middleware.
-// By default all options are set to false intentionally when creating a wrapped
-// driver and provide the most sensible default with both performance and
-// security in mind.
+// By default all boolean options are set to false intentionally when creating
+// a wrapped driver and provide the most sensible default with both performance
+// and security in mind.
 type TraceOptions struct {
-	// RowsAffected, if set to true, will enable the creation of spans on
-	// RowsAffected calls.
-	RowsAffected bool
+	// LastInsertIDSpan, if set to true, will enable the creation of spans on
+	// LastInsertId calls.
+	LastInsertIDSpan bool
 
-	// Query, if set to true, will enable recording of sql queries in spans.
+	// RowsAffectedSpan, if set to true, will enable the creation of spans on
+	// RowsAffectedSpan calls.
+	RowsAffectedSpan bool
+
+	// TagQuery, if set to true, will enable recording of sql queries in spans.
 	// Only allow this if it is safe to have queries recorded with respect to
 	// security.
-	Query bool
+	TagQuery bool
 
-	// LastInsertID, if set to true, will enable the creation of spans on
-	// LastInsertId calls.
-	LastInsertID bool
+	TagAffectedRows bool
 
 	// DefaultTags will be set to each span as default.
 	DefaultTags map[string]string
@@ -34,12 +36,13 @@ func WithAllTraceOptions() TraceOption {
 
 // AllTraceOptions has all tracing options enabled.
 var AllTraceOptions = TraceOptions{
-	RowsAffected: true,
-	Query:        true,
-	LastInsertID: true,
+	RowsAffectedSpan: true,
+	LastInsertIDSpan: true,
+	TagQuery:         true,
+	TagAffectedRows:  true,
 }
 
-// WithOptions sets our ocsql tracing middleware options through a single
+// WithOptions sets the zipkinsql tracing middleware options through a single
 // TraceOptions object.
 func WithOptions(options TraceOptions) TraceOption {
 	return func(o *TraceOptions) {
@@ -47,28 +50,36 @@ func WithOptions(options TraceOptions) TraceOption {
 	}
 }
 
-// WithRowsAffected if set to true, will enable the creation of spans on
+// WithRowsAffectedSpan if set to true, will enable the creation of spans on
 // RowsAffected calls.
-func WithRowsAffected(b bool) TraceOption {
+func WithRowsAffectedSpan(b bool) TraceOption {
 	return func(o *TraceOptions) {
-		o.RowsAffected = b
+		o.RowsAffectedSpan = b
 	}
 }
 
-// WithLastInsertID if set to true, will enable the creation of spans on
+// WithLastInsertIDSpan if set to true, will enable the creation of spans on
 // LastInsertId calls.
-func WithLastInsertID(b bool) TraceOption {
+func WithLastInsertIDSpan(b bool) TraceOption {
 	return func(o *TraceOptions) {
-		o.LastInsertID = b
+		o.LastInsertIDSpan = b
 	}
 }
 
-// WithQuery if set to true, will enable recording of sql queries in spans.
+// WithTagQuery if set to true, will enable recording of SQL queries in spans.
 // Only allow this if it is safe to have queries recorded with respect to
 // security.
-func WithQuery(b bool) TraceOption {
+func WithTagQuery(b bool) TraceOption {
 	return func(o *TraceOptions) {
-		o.Query = b
+		o.TagQuery = b
+	}
+}
+
+// WithTagAffectedRows if set to true, will enable recording of the affected rows
+// number in spans.
+func WithTagAffectedRows(b bool) TraceOption {
+	return func(o *TraceOptions) {
+		o.TagAffectedRows = b
 	}
 }
 
