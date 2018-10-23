@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	zipkin "github.com/openzipkin/zipkin-go"
+	zipkinmodel "github.com/openzipkin/zipkin-go/model"
 )
 
 type conn interface {
@@ -172,7 +173,7 @@ func (c zConn) ExecContext(ctx context.Context, query string, args []driver.Name
 			return execCtx.ExecContext(ctx, query, args)
 		}
 
-		span, _ := c.tracer.StartSpanFromContext(ctx, "sql/exec")
+		span, _ := c.tracer.StartSpanFromContext(ctx, "sql/exec", zipkin.Kind(zipkinmodel.Client))
 		defer span.Finish()
 
 		if c.options.TagQuery {
@@ -206,7 +207,7 @@ func (c zConn) QueryContext(ctx context.Context, query string, args []driver.Nam
 			return queryerCtx.QueryContext(ctx, query, args)
 		}
 
-		span, _ := c.tracer.StartSpanFromContext(ctx, "sql/exec")
+		span, _ := c.tracer.StartSpanFromContext(ctx, "sql/exec", zipkin.Kind(zipkinmodel.Client))
 		defer span.Finish()
 
 		if c.options.TagQuery {
@@ -261,7 +262,7 @@ func (c *zConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, 
 		return c.driver.Begin()
 	}
 
-	span, _ := c.tracer.StartSpanFromContext(ctx, "sql/begin_transaction")
+	span, _ := c.tracer.StartSpanFromContext(ctx, "sql/begin_transaction", zipkin.Kind(zipkinmodel.Client))
 	defer span.Finish()
 
 	setSpanDefaultTags(span, c.options.DefaultTags)
@@ -297,7 +298,7 @@ func (r zResult) LastInsertId() (int64, error) {
 		return r.driver.LastInsertId()
 	}
 
-	span, _ := r.tracer.StartSpanFromContext(r.ctx, "sql/last_insert_id")
+	span, _ := r.tracer.StartSpanFromContext(r.ctx, "sql/last_insert_id", zipkin.Kind(zipkinmodel.Client))
 	defer span.Finish()
 
 	setSpanDefaultTags(span, r.options.DefaultTags)
@@ -311,7 +312,7 @@ func (r zResult) LastInsertId() (int64, error) {
 func (r zResult) RowsAffected() (cnt int64, err error) {
 	zipkin.SpanFromContext(r.ctx)
 	if r.options.RowsAffectedSpan && zipkin.SpanFromContext(r.ctx) != nil {
-		span, _ := r.tracer.StartSpanFromContext(r.ctx, "sql/rows_affected")
+		span, _ := r.tracer.StartSpanFromContext(r.ctx, "sql/rows_affected", zipkin.Kind(zipkinmodel.Client))
 		setSpanDefaultTags(span, r.options.DefaultTags)
 		defer func() {
 			span.Tag("sql.affected_rows", fmt.Sprintf("%d", cnt))
@@ -353,7 +354,7 @@ func (s zStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res d
 		return s.driver.(driver.StmtExecContext).ExecContext(ctx, args)
 	}
 
-	span, ctx := s.tracer.StartSpanFromContext(ctx, "sql/exec")
+	span, ctx := s.tracer.StartSpanFromContext(ctx, "sql/exec", zipkin.Kind(zipkinmodel.Client))
 	defer func() {
 		setSpanError(span, err)
 		span.Finish()
@@ -386,7 +387,7 @@ func (s zStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (rows
 		return s.driver.(driver.StmtQueryContext).QueryContext(ctx, args)
 	}
 
-	span, ctx := s.tracer.StartSpanFromContext(ctx, "sql/query")
+	span, ctx := s.tracer.StartSpanFromContext(ctx, "sql/query", zipkin.Kind(zipkinmodel.Client))
 	defer func() {
 		setSpanError(span, err)
 		span.Finish()
@@ -442,7 +443,7 @@ type zTx struct {
 }
 
 func (t zTx) Commit() (err error) {
-	span, _ := t.tracer.StartSpanFromContext(t.ctx, "sql/commit")
+	span, _ := t.tracer.StartSpanFromContext(t.ctx, "sql/commit", zipkin.Kind(zipkinmodel.Client))
 	defer func() {
 		setSpanDefaultTags(span, t.options.DefaultTags)
 		setSpanError(span, err)
@@ -454,7 +455,7 @@ func (t zTx) Commit() (err error) {
 }
 
 func (t zTx) Rollback() (err error) {
-	span, _ := t.tracer.StartSpanFromContext(t.ctx, "sql/rollback")
+	span, _ := t.tracer.StartSpanFromContext(t.ctx, "sql/rollback", zipkin.Kind(zipkinmodel.Client))
 	defer func() {
 		setSpanDefaultTags(span, t.options.DefaultTags)
 		setSpanError(span, err)
