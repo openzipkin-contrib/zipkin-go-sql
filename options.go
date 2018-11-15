@@ -8,6 +8,12 @@ type TraceOption func(o *TraceOptions)
 // a wrapped driver and provide the most sensible default with both performance
 // and security in mind.
 type TraceOptions struct {
+	// AllowRoot, if set to true, will allow zipkinsql to create root spans in
+	// absence of existing spans or even context.
+	// Default is to not trace zipkinsql calls if no existing parent span is found
+	// in context or when using methods not taking context.
+	AllowRootSpan bool
+
 	// LastInsertIDSpan, if set to true, will enable the creation of spans on
 	// LastInsertId calls.
 	LastInsertIDSpan bool
@@ -36,6 +42,7 @@ func WithAllTraceOptions() TraceOption {
 
 // AllTraceOptions has all tracing options enabled.
 var AllTraceOptions = TraceOptions{
+	AllowRootSpan:    true,
 	RowsAffectedSpan: true,
 	LastInsertIDSpan: true,
 	TagQuery:         true,
@@ -47,6 +54,16 @@ var AllTraceOptions = TraceOptions{
 func WithOptions(options TraceOptions) TraceOption {
 	return func(o *TraceOptions) {
 		*o = options
+	}
+}
+
+// WithAllowRootSpan if set to true, will allow zipkinsql to create root spans in
+// absence of exisiting spans or even context.
+// Default is to not trace zipkinsql calls if no existing parent span is found
+// in context or when using methods not taking context.
+func WithAllowRootSpan(b bool) TraceOption {
+	return func(o *TraceOptions) {
+		o.AllowRootSpan = b
 	}
 }
 
