@@ -169,7 +169,7 @@ func (c zConn) Exec(query string, args []driver.Value) (res driver.Result, err e
 
 func (c zConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (res driver.Result, err error) {
 	if execCtx, ok := c.driver.(driver.ExecerContext); ok {
-		if zipkin.SpanFromContext(ctx) == nil {
+		if zipkin.SpanFromContext(ctx) == nil && !c.options.AllowRootSpan {
 			return execCtx.ExecContext(ctx, query, args)
 		}
 
@@ -187,7 +187,7 @@ func (c zConn) ExecContext(ctx context.Context, query string, args []driver.Name
 			return nil, err
 		}
 
-		return zResult{driver: res, ctx: ctx, options: c.options}, nil
+		return zResult{driver: res, tracer: c.tracer, ctx: ctx, options: c.options}, nil
 	}
 
 	return nil, driver.ErrSkip
@@ -203,11 +203,11 @@ func (c zConn) Query(query string, args []driver.Value) (rows driver.Rows, err e
 
 func (c zConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (rows driver.Rows, err error) {
 	if queryerCtx, ok := c.driver.(driver.QueryerContext); ok {
-		if zipkin.SpanFromContext(ctx) == nil {
+		if zipkin.SpanFromContext(ctx) == nil && !c.options.AllowRootSpan {
 			return queryerCtx.QueryContext(ctx, query, args)
 		}
 
-		span, _ := c.tracer.StartSpanFromContext(ctx, "sql/exec", zipkin.Kind(zipkinmodel.Client))
+		span, _ := c.tracer.StartSpanFromContext(ctx, "sql/query", zipkin.Kind(zipkinmodel.Client))
 		defer span.Finish()
 
 		if c.options.TagQuery {
@@ -254,7 +254,7 @@ func (c *zConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, 
 }
 
 func (c *zConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
-	if zipkin.SpanFromContext(ctx) == nil {
+	if zipkin.SpanFromContext(ctx) == nil && !c.options.AllowRootSpan {
 		if connBeginTx, ok := c.driver.(driver.ConnBeginTx); ok {
 			return connBeginTx.BeginTx(ctx, opts)
 		}
@@ -311,7 +311,7 @@ func (r zResult) LastInsertId() (int64, error) {
 
 func (r zResult) RowsAffected() (cnt int64, err error) {
 	zipkin.SpanFromContext(r.ctx)
-	if r.options.RowsAffectedSpan && zipkin.SpanFromContext(r.ctx) != nil {
+	if r.options.RowsAffectedSpan && (r.options.AllowRootSpan || zipkin.SpanFromContext(r.ctx) != nil) {
 		span, _ := r.tracer.StartSpanFromContext(r.ctx, "sql/rows_affected", zipkin.Kind(zipkinmodel.Client))
 		setSpanDefaultTags(span, r.options.DefaultTags)
 		defer func() {
@@ -350,7 +350,7 @@ func (s zStmt) Query(args []driver.Value) (driver.Rows, error) {
 }
 
 func (s zStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res driver.Result, err error) {
-	if zipkin.SpanFromContext(ctx) == nil {
+	if zipkin.SpanFromContext(ctx) == nil && !s.options.AllowRootSpan {
 		return s.driver.(driver.StmtExecContext).ExecContext(ctx, args)
 	}
 
@@ -378,12 +378,12 @@ func (s zStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res d
 		}
 	}
 
-	res, err = zResult{driver: res, ctx: ctx, options: s.options}, nil
+	res, err = zResult{driver: res, tracer: s.tracer, ctx: ctx, options: s.options}, nil
 	return
 }
 
 func (s zStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (rows driver.Rows, err error) {
-	if zipkin.SpanFromContext(ctx) == nil {
+	if zipkin.SpanFromContext(ctx) == nil && !s.options.AllowRootSpan {
 		return s.driver.(driver.StmtQueryContext).QueryContext(ctx, args)
 	}
 
@@ -443,25 +443,27 @@ type zTx struct {
 }
 
 func (t zTx) Commit() (err error) {
-	span, _ := t.tracer.StartSpanFromContext(t.ctx, "sql/commit", zipkin.Kind(zipkinmodel.Client))
-	defer func() {
-		setSpanDefaultTags(span, t.options.DefaultTags)
-		setSpanError(span, err)
-		span.Finish()
-	}()
-
+	if zipkin.SpanFromContext(t.ctx) != nil || t.options.AllowRootSpan {
+		span, _ := t.tracer.StartSpanFromContext(t.ctx, "sql/commit", zipkin.Kind(zipkinmodel.Client))
+		defer func() {
+			setSpanDefaultTags(span, t.options.DefaultTags)
+			setSpanError(span, err)
+			span.Finish()
+		}()
+	}
 	err = t.driver.Commit()
 	return
 }
 
 func (t zTx) Rollback() (err error) {
-	span, _ := t.tracer.StartSpanFromContext(t.ctx, "sql/rollback", zipkin.Kind(zipkinmodel.Client))
-	defer func() {
-		setSpanDefaultTags(span, t.options.DefaultTags)
-		setSpanError(span, err)
-		span.Finish()
-	}()
-
+	if zipkin.SpanFromContext(t.ctx) != nil || t.options.AllowRootSpan {
+		span, _ := t.tracer.StartSpanFromContext(t.ctx, "sql/rollback", zipkin.Kind(zipkinmodel.Client))
+		defer func() {
+			setSpanDefaultTags(span, t.options.DefaultTags)
+			setSpanError(span, err)
+			span.Finish()
+		}()
+	}
 	err = t.driver.Rollback()
 	return
 }
