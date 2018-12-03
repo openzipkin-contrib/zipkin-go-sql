@@ -24,9 +24,12 @@ type conn interface {
 
 var (
 	// Type assertions
-	_ driver.Driver = &zDriver{}
-	_ conn          = &zConn{}
-	_ driver.Result = &zResult{}
+	_ driver.Driver           = &zDriver{}
+	_ conn                    = &zConn{}
+	_ driver.Result           = &zResult{}
+	_ driver.Stmt             = &zStmt{}
+	_ driver.StmtExecContext  = &zStmt{}
+	_ driver.StmtQueryContext = &zStmt{}
 )
 
 var (
@@ -66,100 +69,39 @@ func Wrap(d driver.Driver, t *zipkin.Tracer, options ...TraceOption) driver.Driv
 	return wrapDriver(d, t, o)
 }
 
-// zipkinDriver implements driver.Driver
-type zDriver struct {
-	driver  driver.Driver
-	tracer  *zipkin.Tracer
-	options TraceOptions
-}
-
-func wrapDriver(d driver.Driver, t *zipkin.Tracer, o TraceOptions) driver.Driver {
-	return &zDriver{driver: d, tracer: t, options: o}
-}
-
-func wrapConn(c driver.Conn, t *zipkin.Tracer, options TraceOptions) driver.Conn {
-	return &zConn{conn: c, tracer: t, options: options}
-}
-
-func wrapStmt(stmt driver.Stmt, query string, tracer *zipkin.Tracer, options TraceOptions) driver.Stmt {
-	s := zStmt{stmt: stmt, query: query, options: options, tracer: tracer}
-	_, hasExeCtx := stmt.(driver.StmtExecContext)
-	_, hasQryCtx := stmt.(driver.StmtQueryContext)
-	c, hasColCnv := stmt.(driver.ColumnConverter)
-	switch {
-	case !hasExeCtx && !hasQryCtx && !hasColCnv:
-		return struct {
-			driver.Stmt
-		}{s}
-	case !hasExeCtx && hasQryCtx && !hasColCnv:
-		return struct {
-			driver.Stmt
-			driver.StmtQueryContext
-		}{s, s}
-	case hasExeCtx && !hasQryCtx && !hasColCnv:
-		return struct {
-			driver.Stmt
-			driver.StmtExecContext
-		}{s, s}
-	case hasExeCtx && hasQryCtx && !hasColCnv:
-		return struct {
-			driver.Stmt
-			driver.StmtExecContext
-			driver.StmtQueryContext
-		}{s, s, s}
-	case !hasExeCtx && !hasQryCtx && hasColCnv:
-		return struct {
-			driver.Stmt
-			driver.ColumnConverter
-		}{s, c}
-	case !hasExeCtx && hasQryCtx && hasColCnv:
-		return struct {
-			driver.Stmt
-			driver.StmtQueryContext
-			driver.ColumnConverter
-		}{s, s, c}
-	case hasExeCtx && !hasQryCtx && hasColCnv:
-		return struct {
-			driver.Stmt
-			driver.StmtExecContext
-			driver.ColumnConverter
-		}{s, s, c}
-	case hasExeCtx && hasQryCtx && hasColCnv:
-		return struct {
-			driver.Stmt
-			driver.StmtExecContext
-			driver.StmtQueryContext
-			driver.ColumnConverter
-		}{s, s, s, c}
-	}
-
-	panic("unreachable")
-}
-
 func (d zDriver) Open(name string) (driver.Conn, error) {
-	c, err := d.driver.Open(name)
+	c, err := d.parent.Open(name)
 	if err != nil {
 		return nil, err
 	}
 	return wrapConn(c, d.tracer, d.options), nil
 }
 
+// WrapConn allows an existing driver.Conn to be wrapped by zipkinsql.
+func WrapConn(c driver.Conn, t *zipkin.Tracer, options ...TraceOption) driver.Conn {
+	o := TraceOptions{}
+	for _, option := range options {
+		option(&o)
+	}
+	return wrapConn(c, t, o)
+}
+
 // zConn implements driver.Conn
 type zConn struct {
-	conn    driver.Conn
+	parent  driver.Conn
 	tracer  *zipkin.Tracer
 	options TraceOptions
 }
 
 func (c zConn) Ping(ctx context.Context) (err error) {
-	if pinger, ok := c.conn.(driver.Pinger); ok {
+	if pinger, ok := c.parent.(driver.Pinger); ok {
 		err = pinger.Ping(ctx)
 	}
 	return
 }
 
 func (c zConn) Exec(query string, args []driver.Value) (res driver.Result, err error) {
-	if exec, ok := c.conn.(driver.Execer); ok {
+	if exec, ok := c.parent.(driver.Execer); ok {
 		return exec.Exec(query, args)
 	}
 
@@ -167,7 +109,7 @@ func (c zConn) Exec(query string, args []driver.Value) (res driver.Result, err e
 }
 
 func (c zConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (res driver.Result, err error) {
-	if execCtx, ok := c.conn.(driver.ExecerContext); ok {
+	if execCtx, ok := c.parent.(driver.ExecerContext); ok {
 		if zipkin.SpanFromContext(ctx) == nil && !c.options.AllowRootSpan {
 			return execCtx.ExecContext(ctx, query, args)
 		}
@@ -186,14 +128,14 @@ func (c zConn) ExecContext(ctx context.Context, query string, args []driver.Name
 			return nil, err
 		}
 
-		return zResult{result: res, tracer: c.tracer, ctx: ctx, options: c.options}, nil
+		return zResult{parent: res, tracer: c.tracer, ctx: ctx, options: c.options}, nil
 	}
 
 	return nil, driver.ErrSkip
 }
 
 func (c zConn) Query(query string, args []driver.Value) (rows driver.Rows, err error) {
-	if queryer, ok := c.conn.(driver.Queryer); ok {
+	if queryer, ok := c.parent.(driver.Queryer); ok {
 		return queryer.Query(query, args)
 	}
 
@@ -201,12 +143,18 @@ func (c zConn) Query(query string, args []driver.Value) (rows driver.Rows, err e
 }
 
 func (c zConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (rows driver.Rows, err error) {
-	if queryerCtx, ok := c.conn.(driver.QueryerContext); ok {
-		if zipkin.SpanFromContext(ctx) == nil && !c.options.AllowRootSpan {
+	if queryerCtx, ok := c.parent.(driver.QueryerContext); ok {
+		parentSpan := zipkin.SpanFromContext(ctx)
+		if parentSpan == nil && !c.options.AllowRootSpan {
 			return queryerCtx.QueryContext(ctx, query, args)
 		}
 
-		span, _ := c.tracer.StartSpanFromContext(ctx, "sql/query", zipkin.Kind(zipkinmodel.Client))
+		var span zipkin.Span
+		if parentSpan == nil {
+			span, ctx = c.tracer.StartSpanFromContext(ctx, "sql/query", zipkin.Kind(zipkinmodel.Client))
+		} else {
+			span, _ = c.tracer.StartSpanFromContext(ctx, "sql/query", zipkin.Kind(zipkinmodel.Client))
+		}
 		defer span.Finish()
 
 		if c.options.TagQuery {
@@ -227,7 +175,7 @@ func (c zConn) QueryContext(ctx context.Context, query string, args []driver.Nam
 }
 
 func (c zConn) Prepare(query string) (stmt driver.Stmt, err error) {
-	stmt, err = c.conn.Prepare(query)
+	stmt, err = c.parent.Prepare(query)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +185,7 @@ func (c zConn) Prepare(query string) (stmt driver.Stmt, err error) {
 }
 
 func (c *zConn) Close() error {
-	return c.conn.Close()
+	return c.parent.Close()
 }
 
 func (c *zConn) Begin() (driver.Tx, error) {
@@ -245,20 +193,20 @@ func (c *zConn) Begin() (driver.Tx, error) {
 }
 
 func (c *zConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
-	if prepCtx, ok := c.conn.(driver.ConnPrepareContext); ok {
+	if prepCtx, ok := c.parent.(driver.ConnPrepareContext); ok {
 		return prepCtx.PrepareContext(ctx, query)
 	}
 
-	return c.conn.Prepare(query)
+	return c.parent.Prepare(query)
 }
 
 func (c *zConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	if zipkin.SpanFromContext(ctx) == nil && !c.options.AllowRootSpan {
-		if connBeginTx, ok := c.conn.(driver.ConnBeginTx); ok {
+		if connBeginTx, ok := c.parent.(driver.ConnBeginTx); ok {
 			return connBeginTx.BeginTx(ctx, opts)
 		}
 
-		return c.conn.Begin()
+		return c.parent.Begin()
 	}
 
 	span, _ := c.tracer.StartSpanFromContext(ctx, "sql/begin_transaction", zipkin.Kind(zipkinmodel.Client))
@@ -266,27 +214,27 @@ func (c *zConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, 
 
 	setSpanDefaultTags(span, c.options.DefaultTags)
 
-	if connBeginTx, ok := c.conn.(driver.ConnBeginTx); ok {
+	if connBeginTx, ok := c.parent.(driver.ConnBeginTx); ok {
 		tx, err := connBeginTx.BeginTx(ctx, opts)
 		setSpanError(span, err)
 		if err != nil {
 			return nil, err
 		}
-		return zTx{tx: tx, ctx: ctx, tracer: c.tracer, options: c.options}, nil
+		return zTx{parent: tx, ctx: ctx, tracer: c.tracer, options: c.options}, nil
 	}
 
-	tx, err := c.conn.Begin()
+	tx, err := c.parent.Begin()
 	setSpanError(span, err)
 	if err != nil {
 		return nil, err
 	}
 
-	return zTx{tx: tx, ctx: ctx, tracer: c.tracer, options: c.options}, nil
+	return zTx{parent: tx, ctx: ctx, tracer: c.tracer, options: c.options}, nil
 }
 
 // zResult implements driver.Result
 type zResult struct {
-	result  driver.Result
+	parent  driver.Result
 	ctx     context.Context
 	tracer  *zipkin.Tracer
 	options TraceOptions
@@ -294,7 +242,7 @@ type zResult struct {
 
 func (r zResult) LastInsertId() (int64, error) {
 	if !r.options.LastInsertIDSpan {
-		return r.result.LastInsertId()
+		return r.parent.LastInsertId()
 	}
 
 	span, _ := r.tracer.StartSpanFromContext(r.ctx, "sql/last_insert_id", zipkin.Kind(zipkinmodel.Client))
@@ -302,7 +250,7 @@ func (r zResult) LastInsertId() (int64, error) {
 
 	setSpanDefaultTags(span, r.options.DefaultTags)
 
-	id, err := r.result.LastInsertId()
+	id, err := r.parent.LastInsertId()
 	setSpanError(span, err)
 
 	return id, err
@@ -320,13 +268,13 @@ func (r zResult) RowsAffected() (cnt int64, err error) {
 		}()
 	}
 
-	cnt, err = r.result.RowsAffected()
+	cnt, err = r.parent.RowsAffected()
 	return
 }
 
 // zStmt implements driver.Stmt
 type zStmt struct {
-	stmt    driver.Stmt
+	parent  driver.Stmt
 	query   string
 	tracer  *zipkin.Tracer
 	options TraceOptions
@@ -334,7 +282,7 @@ type zStmt struct {
 
 func (s zStmt) Exec(args []driver.Value) (res driver.Result, err error) {
 	if !s.options.AllowRootSpan {
-		return s.stmt.Exec(args)
+		return s.parent.Exec(args)
 	}
 
 	span, ctx := s.tracer.StartSpanFromContext(context.Background(), "sql:exec", zipkin.Kind(zipkinmodel.Client))
@@ -349,26 +297,26 @@ func (s zStmt) Exec(args []driver.Value) (res driver.Result, err error) {
 		span.Finish()
 	}()
 
-	res, err = s.stmt.Exec(args)
+	res, err = s.parent.Exec(args)
 	if err != nil {
 		return nil, err
 	}
 
-	res, err = zResult{result: res, ctx: ctx, tracer: s.tracer, options: s.options}, nil
+	res, err = zResult{parent: res, ctx: ctx, tracer: s.tracer, options: s.options}, nil
 	return
 }
 
 func (s zStmt) Close() error {
-	return s.stmt.Close()
+	return s.parent.Close()
 }
 
 func (s zStmt) NumInput() int {
-	return s.stmt.NumInput()
+	return s.parent.NumInput()
 }
 
 func (s zStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
 	if !s.options.AllowRootSpan {
-		return s.stmt.Query(args)
+		return s.parent.Query(args)
 	}
 
 	span, _ := s.tracer.StartSpanFromContext(context.Background(), "sql:query", zipkin.Kind(zipkinmodel.Client))
@@ -383,7 +331,7 @@ func (s zStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
 		span.Finish()
 	}()
 
-	rows, err = s.stmt.Query(args)
+	rows, err = s.parent.Query(args)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +341,7 @@ func (s zStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
 
 func (s zStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res driver.Result, err error) {
 	if zipkin.SpanFromContext(ctx) == nil && !s.options.AllowRootSpan {
-		return s.stmt.(driver.StmtExecContext).ExecContext(ctx, args)
+		return s.parent.(driver.StmtExecContext).ExecContext(ctx, args)
 	}
 
 	span, ctx := s.tracer.StartSpanFromContext(ctx, "sql/exec", zipkin.Kind(zipkinmodel.Client))
@@ -408,7 +356,7 @@ func (s zStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res d
 
 	setSpanDefaultTags(span, s.options.DefaultTags)
 
-	execContext := s.stmt.(driver.StmtExecContext)
+	execContext := s.parent.(driver.StmtExecContext)
 	res, err = execContext.ExecContext(ctx, args)
 	if err != nil {
 		return nil, err
@@ -420,13 +368,13 @@ func (s zStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res d
 		}
 	}
 
-	res, err = zResult{result: res, tracer: s.tracer, ctx: ctx, options: s.options}, nil
+	res, err = zResult{parent: res, tracer: s.tracer, ctx: ctx, options: s.options}, nil
 	return
 }
 
 func (s zStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (rows driver.Rows, err error) {
 	if zipkin.SpanFromContext(ctx) == nil && !s.options.AllowRootSpan {
-		return s.stmt.(driver.StmtQueryContext).QueryContext(ctx, args)
+		return s.parent.(driver.StmtQueryContext).QueryContext(ctx, args)
 	}
 
 	span, ctx := s.tracer.StartSpanFromContext(ctx, "sql/query", zipkin.Kind(zipkinmodel.Client))
@@ -447,7 +395,7 @@ func (s zStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (rows
 	}()
 
 	// we already tested driver to implement StmtQueryContext
-	queryContext := s.stmt.(driver.StmtQueryContext)
+	queryContext := s.parent.(driver.StmtQueryContext)
 	rows, err = queryContext.QueryContext(ctx, args)
 	if err != nil {
 		return nil, err
@@ -458,7 +406,7 @@ func (s zStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (rows
 
 // zTx implemens driver.Tx
 type zTx struct {
-	tx      driver.Tx
+	parent  driver.Tx
 	ctx     context.Context
 	tracer  *zipkin.Tracer
 	options TraceOptions
@@ -473,7 +421,7 @@ func (t zTx) Commit() (err error) {
 			span.Finish()
 		}()
 	}
-	err = t.tx.Commit()
+	err = t.parent.Commit()
 	return
 }
 
@@ -486,7 +434,7 @@ func (t zTx) Rollback() (err error) {
 			span.Finish()
 		}()
 	}
-	err = t.tx.Rollback()
+	err = t.parent.Rollback()
 	return
 }
 

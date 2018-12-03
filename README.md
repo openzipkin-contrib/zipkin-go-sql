@@ -3,7 +3,6 @@
 [![Build Status](https://travis-ci.com/jcchavezs/zipkin-instrumentation-sql.svg?branch=master)](https://travis-ci.com/jcchavezs/zipkin-instrumentation-sql)
 [![Go Report Card](https://goreportcard.com/badge/github.com/jcchavezs/zipkin-instrumentation-sql)](https://goreportcard.com/report/github.com/jcchavezs/zipkin-instrumentation-sql)
 [![GoDoc](https://godoc.org/github.com/jcchavezs/zipkin-instrumentation-sql?status.svg)](https://godoc.org/github.com/jcchavezs/zipkin-instrumentation-sql)
-[![Sourcegraph](https://sourcegraph.com/github.com/jcchavezs/zipkin-instrumentation-sql/-/badge.svg)](https://sourcegraph.com/github.com/jcchavezs/zipkin-instrumentation-sql?badge)
 
 A SQL wrapper including Zipkin instrumentation
 
@@ -57,6 +56,21 @@ sql.Register("zipkinsql-mysql", driver)
 
 // Connect to a MySQL database using the zipkinsql driver wrapper
 db, err = sql.Open("zipkinsql-mysql", "myDSN")
+```
+
+Projects providing their own abstractions on top of database/sql/driver can also wrap an existing driver.Conn interface directly with zipkinsql.
+
+```go
+
+import "github.com/opencensus-integrations/zipkinsql"
+
+func initializeConn(...) driver.Conn {
+    // create custom driver.Conn
+    conn := Connect(...)
+
+    // wrap with zipkinsql
+    return zipkinsql.WrapConn(conn, tracer, zipkinsql.WithAllTraceOptions())
+}
 ```
 
 ## Usage of *Context methods
