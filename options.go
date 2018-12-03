@@ -27,6 +27,10 @@ type TraceOptions struct {
 	// security.
 	TagQuery bool
 
+	// TagAffectedRows, if set to true, will enable the recording of the number of
+	// affected rows for the query. Some engines may include this in the response
+	// of the query but some require an extra query to obtain the number of affected
+	// rows.
 	TagAffectedRows bool
 
 	// DefaultTags will be set to each span as default.
