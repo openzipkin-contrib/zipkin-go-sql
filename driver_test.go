@@ -3,7 +3,6 @@ package zipkinsql
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -41,7 +40,7 @@ func TestQuerySuccess(t *testing.T) {
 	for _, c := range testCases {
 		db, _, recorder := createDB(t, c.opts...)
 
-		rows, err := db.Query("SELECT 1")
+		rows, err := db.Query("SELECT 1 WHERE 1 = ?", 1)
 		if err != nil {
 			t.Fatalf("unexpected error: %s", err.Error())
 		}
@@ -65,6 +64,10 @@ func TestQuerySuccess(t *testing.T) {
 		if c.expectedSpans > 0 {
 			if want, have := "sql/query", spans[0].Name; want != have {
 				t.Fatalf("unexpected span name, want: %s, have: %s", want, have)
+			}
+
+			if errMsg, ok := spans[0].Tags["error"]; ok {
+				t.Fatalf("unexpected error: %s", errMsg)
 			}
 		}
 
@@ -81,7 +84,7 @@ func TestQueryContextSuccess(t *testing.T) {
 	for _, c := range testCases {
 		db, _, recorder := createDB(t, c.opts...)
 
-		rows, err := db.QueryContext(ctx, "SELECT 1")
+		rows, err := db.QueryContext(ctx, "SELECT 1 WHERE 1 = ?", 1)
 		if err != nil {
 			t.Fatalf("unexpected error: %s", err.Error())
 		}
@@ -106,6 +109,10 @@ func TestQueryContextSuccess(t *testing.T) {
 			if want, have := "sql/query", spans[0].Name; want != have {
 				t.Fatalf("unexpected span name, want: %s, have: %s", want, have)
 			}
+
+			if errMsg, ok := spans[0].Tags["error"]; ok {
+				t.Fatalf("unexpected error: %s", errMsg)
+			}
 		}
 
 		db.Close()
@@ -119,7 +126,7 @@ func TestQueryContextPropagationSuccess(t *testing.T) {
 
 	span, ctx := tracer.StartSpanFromContext(ctx, "root")
 
-	rows, err := db.QueryContext(ctx, "SELECT 1")
+	rows, err := db.QueryContext(ctx, "SELECT 1 WHERE 1 = ?", 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err.Error())
 	}
@@ -146,6 +153,10 @@ func TestQueryContextPropagationSuccess(t *testing.T) {
 		t.Fatalf("unexpected span name, want: %s, have: %s", want, have)
 	}
 
+	if errMsg, ok := spans[0].Tags["error"]; ok {
+		t.Fatalf("unexpected error: %s", errMsg)
+	}
+
 	db.Close()
 	recorder.Close()
 }
@@ -164,6 +175,7 @@ func TestExecContextSuccess(t *testing.T) {
 		db, _, recorder := createDB(t, c.opts...)
 
 		sqlStmt := `
+		drop table if exists foo;
 		create table foo (id integer not null primary key, name text);
 		delete from foo;
 	`
@@ -192,6 +204,10 @@ func TestExecContextSuccess(t *testing.T) {
 			if want, have := "sql/exec", spans[0].Name; want != have {
 				t.Fatalf("unexpected span name, want: %s, have: %s", want, have)
 			}
+
+			if errMsg, ok := spans[0].Tags["error"]; ok {
+				t.Fatalf("unexpected error: %s", errMsg)
+			}
 		}
 
 		db.Close()
@@ -204,13 +220,14 @@ func TestTxWithCommitSuccess(t *testing.T) {
 
 	testCases := []testCase{
 		{[]TraceOption{WithAllowRootSpan(false)}, 0},
-		{[]TraceOption{WithAllowRootSpan(true)}, 3},
+		{[]TraceOption{WithAllowRootSpan(true)}, 5},
 	}
 
 	for _, c := range testCases {
 		db, _, recorder := createDB(t, c.opts...)
 
 		sqlStmt := `
+	drop table if exists foo;
 	create table foo (id integer not null primary key, name text);
 	delete from foo;
 `
@@ -229,11 +246,9 @@ func TestTxWithCommitSuccess(t *testing.T) {
 			t.Fatalf("unexpected error: %s", err.Error())
 		}
 		defer stmt.Close()
-		for i := 0; i < 100; i++ {
-			_, err = stmt.Exec(i, fmt.Sprintf("こんにちわ世界%03d", i))
-			if err != nil {
-				t.Fatalf("unexpected error: %s", err.Error())
-			}
+		_, err = stmt.Exec("1", "こんにちわ世界")
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err.Error())
 		}
 		tx.Commit()
 
@@ -247,12 +262,25 @@ func TestTxWithCommitSuccess(t *testing.T) {
 				t.Fatalf("unexpected first span name, want: %s, have: %s", want, have)
 			}
 			if want, have := "sql/begin_transaction", spans[1].Name; want != have {
-				t.Fatalf("unexpected first span name, want: %s, have: %s", want, have)
-			}
-			if want, have := "sql/commit", spans[2].Name; want != have {
 				t.Fatalf("unexpected second span name, want: %s, have: %s", want, have)
 			}
+			if want, have := "sql/prepare", spans[2].Name; want != have {
+				t.Fatalf("unexpected third span name, want: %s, have: %s", want, have)
+			}
+			if want, have := "sql/exec", spans[3].Name; want != have {
+				t.Fatalf("unexpected fourth span name, want: %s, have: %s", want, have)
+			}
+			if want, have := "sql/commit", spans[4].Name; want != have {
+				t.Fatalf("unexpected fifth span name, want: %s, have: %s", want, have)
+			}
+
+			for i := 0; i < 5; i++ {
+				if errMsg, ok := spans[i].Tags["error"]; ok {
+					t.Fatalf("unexpected error: %s", errMsg)
+				}
+			}
 		}
+
 		db.Close()
 		recorder.Close()
 	}
@@ -263,13 +291,14 @@ func TestTxWithRollbackSuccess(t *testing.T) {
 
 	testCases := []testCase{
 		{[]TraceOption{WithAllowRootSpan(false)}, 0},
-		{[]TraceOption{WithAllowRootSpan(true)}, 3},
+		{[]TraceOption{WithAllowRootSpan(true)}, 5},
 	}
 
 	for _, c := range testCases {
 		db, _, recorder := createDB(t, c.opts...)
 
 		sqlStmt := `
+	drop table if exists foo;
 	create table foo (id integer not null primary key, name text);
 	delete from foo;
 `
@@ -288,12 +317,7 @@ func TestTxWithRollbackSuccess(t *testing.T) {
 			t.Fatalf("unexpected error: %s", err.Error())
 		}
 		defer stmt.Close()
-		for i := 0; i < 100; i++ {
-			_, err = stmt.Exec(i, fmt.Sprintf("こんにちわ世界%03d", i))
-			if err != nil {
-				t.Fatalf("unexpected error: %s", err.Error())
-			}
-		}
+		_, err = stmt.Exec("1", "こんにちわ世界")
 		tx.Rollback()
 
 		spans := recorder.Flush()
@@ -306,12 +330,25 @@ func TestTxWithRollbackSuccess(t *testing.T) {
 				t.Fatalf("unexpected first span name, want: %s, have: %s", want, have)
 			}
 			if want, have := "sql/begin_transaction", spans[1].Name; want != have {
-				t.Fatalf("unexpected first span name, want: %s, have: %s", want, have)
-			}
-			if want, have := "sql/rollback", spans[2].Name; want != have {
 				t.Fatalf("unexpected second span name, want: %s, have: %s", want, have)
 			}
+			if want, have := "sql/prepare", spans[2].Name; want != have {
+				t.Fatalf("unexpected third span name, want: %s, have: %s", want, have)
+			}
+			if want, have := "sql/exec", spans[3].Name; want != have {
+				t.Fatalf("unexpected fourth span name, want: %s, have: %s", want, have)
+			}
+			if want, have := "sql/rollback", spans[4].Name; want != have {
+				t.Fatalf("unexpected fifth span name, want: %s, have: %s", want, have)
+			}
+
+			for i := 0; i < c.expectedSpans; i++ {
+				if errMsg, ok := spans[i].Tags["error"]; ok {
+					t.Fatalf("unexpected error: %s", errMsg)
+				}
+			}
 		}
+
 		db.Close()
 		recorder.Close()
 	}
