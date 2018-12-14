@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"sync"
+	"time"
 
 	zipkin "github.com/openzipkin/zipkin-go"
 	zipkinmodel "github.com/openzipkin/zipkin-go/model"
@@ -110,21 +111,32 @@ func (c zConn) Exec(query string, args []driver.Value) (res driver.Result, err e
 
 func (c zConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (res driver.Result, err error) {
 	if execCtx, ok := c.parent.(driver.ExecerContext); ok {
-		if zipkin.SpanFromContext(ctx) == nil && !c.options.AllowRootSpan {
+		parentSpan := zipkin.SpanFromContext(ctx)
+		if parentSpan == nil && !c.options.AllowRootSpan {
 			return execCtx.ExecContext(ctx, query, args)
 		}
 
-		span, _ := c.tracer.StartSpanFromContext(ctx, "sql/exec", zipkin.Kind(zipkinmodel.Client))
-		defer span.Finish()
+		var (
+			startTime time.Time
+		)
 
-		if c.options.TagQuery {
-			span.Tag("sql.query", query)
-		}
+		defer func() {
+			if err == nil || err != driver.ErrSkip {
+				var span zipkin.Span
+				span, _ = c.tracer.StartSpanFromContext(ctx, "sql/exec", zipkin.Kind(zipkinmodel.Client), zipkin.StartTime(startTime))
 
-		setSpanDefaultTags(span, c.options.DefaultTags)
+				if c.options.TagQuery {
+					span.Tag("sql.query", query)
+				}
+				setSpanDefaultTags(span, c.options.DefaultTags)
 
+				setSpanError(span, err)
+				span.Finish()
+			}
+		}()
+
+		startTime = time.Now()
 		if res, err = execCtx.ExecContext(ctx, query, args); err != nil {
-			zipkin.TagError.Set(span, err.Error())
 			return nil, err
 		}
 
@@ -149,22 +161,27 @@ func (c zConn) QueryContext(ctx context.Context, query string, args []driver.Nam
 			return queryerCtx.QueryContext(ctx, query, args)
 		}
 
-		var span zipkin.Span
-		if parentSpan == nil {
-			span, ctx = c.tracer.StartSpanFromContext(ctx, "sql/query", zipkin.Kind(zipkinmodel.Client))
-		} else {
-			span, _ = c.tracer.StartSpanFromContext(ctx, "sql/query", zipkin.Kind(zipkinmodel.Client))
-		}
-		defer span.Finish()
+		var (
+			startTime time.Time
+		)
 
-		if c.options.TagQuery {
-			span.Tag("sql.query", query)
-		}
+		defer func() {
+			if err == nil || err != driver.ErrSkip {
+				var span zipkin.Span
+				span, _ = c.tracer.StartSpanFromContext(ctx, "sql/query", zipkin.Kind(zipkinmodel.Client), zipkin.StartTime(startTime))
 
-		setSpanDefaultTags(span, c.options.DefaultTags)
+				if c.options.TagQuery {
+					span.Tag("sql.query", query)
+				}
+				setSpanDefaultTags(span, c.options.DefaultTags)
 
+				setSpanError(span, err)
+				span.Finish()
+			}
+		}()
+
+		startTime = time.Now()
 		if rows, err = queryerCtx.QueryContext(ctx, query, args); err != nil {
-			zipkin.TagError.Set(span, err.Error())
 			return nil, err
 		}
 
@@ -175,6 +192,19 @@ func (c zConn) QueryContext(ctx context.Context, query string, args []driver.Nam
 }
 
 func (c zConn) Prepare(query string) (stmt driver.Stmt, err error) {
+	if c.options.AllowRootSpan {
+		span := c.tracer.StartSpan("sql/prepare", zipkin.Kind(zipkinmodel.Client))
+
+		if c.options.TagQuery {
+			span.Tag("sql.query", query)
+		}
+		setSpanDefaultTags(span, c.options.DefaultTags)
+		defer func() {
+			setSpanError(span, err)
+			span.Finish()
+		}()
+	}
+
 	stmt, err = c.parent.Prepare(query)
 	if err != nil {
 		return nil, err
@@ -192,12 +222,33 @@ func (c *zConn) Begin() (driver.Tx, error) {
 	return c.Begin()
 }
 
-func (c *zConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
-	if prepCtx, ok := c.parent.(driver.ConnPrepareContext); ok {
-		return prepCtx.PrepareContext(ctx, query)
+func (c *zConn) PrepareContext(ctx context.Context, query string) (stmt driver.Stmt, err error) {
+	var span zipkin.Span
+	setSpanDefaultTags(span, c.options.DefaultTags)
+	if c.options.AllowRootSpan || zipkin.SpanFromContext(ctx) != nil {
+		span, ctx = c.tracer.StartSpanFromContext(ctx, "sql/prepare", zipkin.Kind(zipkinmodel.Client))
+		if c.options.TagQuery {
+			span.Tag("sql.query", query)
+		}
+
+		defer func() {
+			setSpanError(span, err)
+			span.Finish()
+		}()
 	}
 
-	return c.parent.Prepare(query)
+	if prepCtx, ok := c.parent.(driver.ConnPrepareContext); ok {
+		stmt, err = prepCtx.PrepareContext(ctx, query)
+	} else {
+		stmt, err = c.parent.Prepare(query)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	stmt = wrapStmt(stmt, query, c.tracer, c.options)
+	return
 }
 
 func (c *zConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
