@@ -38,7 +38,7 @@ You can also wrap your own driver with zipkin instrumentation as follows:
 
 import (
     mysql "github.com/go-sql-driver/mysql"
-    "github.com/opencensus-integrations/zipkinsql"
+    zipkinsql "github.com/jcchavezs/zipkin-instrumentation-sql"
 )
 
 var (
@@ -62,7 +62,7 @@ Projects providing their own abstractions on top of database/sql/driver can also
 
 ```go
 
-import "github.com/opencensus-integrations/zipkinsql"
+import zipkinsql "github.com/jcchavezs/zipkin-instrumentation-sql"
 
 func initializeConn(...) driver.Conn {
     // create custom driver.Conn
