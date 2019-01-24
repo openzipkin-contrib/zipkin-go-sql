@@ -6,8 +6,20 @@ go:
   - 1.11.x
   - master
 
+env:
+  global:
+    - ZIPKINSQL_MYSQL_DSN="travis@/zipkinsql?interpolateParams=true"
+    - ZIPKINSQL_POSTGRES_DSN="postgres://postgres@localhost/zipkinsql?sslmode=disable"
+
+before_install:
+  - go get github.com/mattn/go-sqlite3
+  - go get github.com/go-sql-driver/mysql
+  - go get github.com/lib/pq
+
 before_script:
   - go get -u golang.org/x/lint/golint
+  - mysql -e 'create database zipkinsql;'
+  - psql -c 'create database zipkinsql;' -U postgres
 
 script:
   - go vet ./...
