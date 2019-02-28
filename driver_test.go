@@ -36,6 +36,7 @@ func TestQuerySuccess(t *testing.T) {
 	testCases := []testCase{
 		{[]TraceOption{WithAllowRootSpan(false)}, 0},
 		{[]TraceOption{WithAllowRootSpan(true)}, 1},
+		{[]TraceOption{WithAllowRootSpan(true), WithTagQuery(true), WithTagQueryParams(true)}, 1},
 	}
 	for _, c := range testCases {
 		db, _, recorder := createDB(t, c.opts...)
@@ -80,6 +81,7 @@ func TestQueryContextSuccess(t *testing.T) {
 	testCases := []testCase{
 		{[]TraceOption{WithAllowRootSpan(false)}, 0},
 		{[]TraceOption{WithAllowRootSpan(true)}, 1},
+		{[]TraceOption{WithAllowRootSpan(true), WithTagQuery(true), WithTagQueryParams(true)}, 1},
 	}
 	for _, c := range testCases {
 		db, _, recorder := createDB(t, c.opts...)
@@ -170,6 +172,7 @@ func TestExecContextSuccess(t *testing.T) {
 		{[]TraceOption{WithAllowRootSpan(true), WithLastInsertIDSpan(true)}, 2},
 		{[]TraceOption{WithAllowRootSpan(true), WithRowsAffectedSpan(true)}, 2},
 		{[]TraceOption{WithAllowRootSpan(true), WithLastInsertIDSpan(true), WithRowsAffectedSpan(true)}, 3},
+		{[]TraceOption{WithAllowRootSpan(true), WithLastInsertIDSpan(true), WithRowsAffectedSpan(true), WithTagQuery(true), WithTagQueryParams(true)}, 3},
 	}
 	for _, c := range testCases {
 		db, _, recorder := createDB(t, c.opts...)
@@ -221,6 +224,7 @@ func TestTxWithCommitSuccess(t *testing.T) {
 	testCases := []testCase{
 		{[]TraceOption{WithAllowRootSpan(false)}, 0},
 		{[]TraceOption{WithAllowRootSpan(true)}, 5},
+		{[]TraceOption{WithAllowRootSpan(true), WithTagQuery(true), WithTagQueryParams(true)}, 5},
 	}
 
 	for _, c := range testCases {
@@ -292,6 +296,7 @@ func TestTxWithRollbackSuccess(t *testing.T) {
 	testCases := []testCase{
 		{[]TraceOption{WithAllowRootSpan(false)}, 0},
 		{[]TraceOption{WithAllowRootSpan(true)}, 5},
+		{[]TraceOption{WithAllowRootSpan(true), WithTagQuery(true), WithTagQueryParams(true)}, 5},
 	}
 
 	for _, c := range testCases {
