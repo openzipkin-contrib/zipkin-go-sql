@@ -18,6 +18,22 @@ var (
 	_ driver.Connector     = &zDriver{}
 )
 
+// WrapConnector allows wrapping a database driver.Connector which eliminates
+// the need to register zipkinsql as an available driver.Driver.
+func WrapConnector(dc driver.Connector, t *zipkin.Tracer, options ...TraceOption) driver.Connector {
+	opts := TraceOptions{}
+	for _, o := range options {
+		o(&opts)
+	}
+
+	return &zDriver{
+		parent:    dc.Driver(),
+		connector: dc,
+		tracer:    t,
+		options:   opts,
+	}
+}
+
 // zDriver implements driver.Driver
 type zDriver struct {
 	parent    driver.Driver

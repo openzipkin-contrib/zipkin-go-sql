@@ -73,6 +73,33 @@ func initializeConn(...) driver.Conn {
 }
 ```
 
+Go 1.10+ provides a new driver.Connector interface that can be 
+wrapped  directly by zipkinsql without the need for zipkinsql to
+register a driver.Driver.
+
+Example:
+```go
+import(
+    zipkinsql "github.com/jcchavezs/zipkin-instrumentation-sql"
+    "github.com/lib/pq"
+)
+var (
+    connector driver.Connector
+    err       error
+    db        *sql.DB
+    tracer *zipkin.Tracer
+)
+
+connector, err = pq.NewConnector("postgres://user:pass@host:5432/db")
+if err != nil {
+    log.Fatalf("unable to create postgres connector: %v\n", err)
+}
+// Wrap the driver.Connector with ocsql.
+connector = zipkinsql.WrapConnector(connector, tracer, zipkinsql.WithAllTraceOptions())
+// Use the wrapped driver.Connector.
+db = sql.OpenDB(connector)
+```
+
 ## Usage of *Context methods
 
 Instrumentation is possible if the context is being passed downstream in methods.
