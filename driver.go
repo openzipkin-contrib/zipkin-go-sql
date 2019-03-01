@@ -366,8 +366,14 @@ func (s zStmt) Exec(args []driver.Value) (res driver.Result, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if s.options.TagAffectedRows {
+		if affectedRows, aRErr := res.RowsAffected(); aRErr != nil {
+			span.Tag("sql.affected_rows", fmt.Sprintf("%d", affectedRows))
+		}
+	}
 
 	res, err = zResult{parent: res, ctx: ctx, tracer: s.tracer, options: s.options}, nil
+
 	return
 }
 
@@ -432,9 +438,8 @@ func (s zStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res d
 	if err != nil {
 		return nil, err
 	}
-
 	if s.options.TagAffectedRows {
-		if affectedRows, err := res.RowsAffected(); err != nil {
+		if affectedRows, aRErr := res.RowsAffected(); aRErr != nil {
 			span.Tag("sql.affected_rows", fmt.Sprintf("%d", affectedRows))
 		}
 	}

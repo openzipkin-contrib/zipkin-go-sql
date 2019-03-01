@@ -29,8 +29,8 @@ type TraceOptions struct {
 
 	// TagQueryParams, if set to true, will enable recording of parameters used
 	// with parametrized queries. Only allow this if it is safe to have
-	// parameters recorded with respect to security.
-	// This setting is a noop if the Query option is set to false.
+	// parameters recorded with respect to security and privacy.
+	// This setting is a noop if the TagQuery option is set to false.
 	TagQueryParams bool
 
 	// TagAffectedRows, if set to true, will enable the recording of the number of
@@ -106,7 +106,7 @@ func WithTagQuery(b bool) TraceOption {
 // WithTagQueryParams if set to true, will enable recording of parameters used
 // with parametrized queries. Only allow this if it is safe to have
 // parameters recorded with respect to security.
-// This setting is a noop if the Query option is set to false.
+// This setting is a noop if the TagQuery option is set to false.
 func WithTagQueryParams(b bool) TraceOption {
 	return func(o *TraceOptions) {
 		o.TagQueryParams = b
