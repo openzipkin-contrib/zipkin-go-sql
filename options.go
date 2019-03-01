@@ -27,6 +27,12 @@ type TraceOptions struct {
 	// security.
 	TagQuery bool
 
+	// TagQueryParams, if set to true, will enable recording of parameters used
+	// with parametrized queries. Only allow this if it is safe to have
+	// parameters recorded with respect to security and privacy.
+	// This setting is a noop if the TagQuery option is set to false.
+	TagQueryParams bool
+
 	// TagAffectedRows, if set to true, will enable the recording of the number of
 	// affected rows for the query. Some engines may include this in the response
 	// of the query but some require an extra query to obtain the number of affected
@@ -50,6 +56,7 @@ var AllTraceOptions = TraceOptions{
 	RowsAffectedSpan: true,
 	LastInsertIDSpan: true,
 	TagQuery:         true,
+	TagQueryParams:   true,
 	TagAffectedRows:  true,
 }
 
@@ -93,6 +100,16 @@ func WithLastInsertIDSpan(b bool) TraceOption {
 func WithTagQuery(b bool) TraceOption {
 	return func(o *TraceOptions) {
 		o.TagQuery = b
+	}
+}
+
+// WithTagQueryParams if set to true, will enable recording of parameters used
+// with parametrized queries. Only allow this if it is safe to have
+// parameters recorded with respect to security.
+// This setting is a noop if the TagQuery option is set to false.
+func WithTagQueryParams(b bool) TraceOption {
+	return func(o *TraceOptions) {
+		o.TagQueryParams = b
 	}
 }
 

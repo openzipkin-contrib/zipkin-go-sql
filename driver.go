@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -67,6 +68,10 @@ func Wrap(d driver.Driver, t *zipkin.Tracer, options ...TraceOption) driver.Driv
 	for _, option := range options {
 		option(&o)
 	}
+	if o.TagQueryParams && !o.TagQuery {
+		o.TagQueryParams = false
+	}
+
 	return wrapDriver(d, t, o)
 }
 
@@ -127,6 +132,9 @@ func (c zConn) ExecContext(ctx context.Context, query string, args []driver.Name
 
 				if c.options.TagQuery {
 					span.Tag("sql.query", query)
+					if c.options.TagQueryParams {
+						addNamedParamsTags(span, args)
+					}
 				}
 				setSpanDefaultTags(span, c.options.DefaultTags)
 
@@ -172,6 +180,9 @@ func (c zConn) QueryContext(ctx context.Context, query string, args []driver.Nam
 
 				if c.options.TagQuery {
 					span.Tag("sql.query", query)
+					if c.options.TagQueryParams {
+						addNamedParamsTags(span, args)
+					}
 				}
 				setSpanDefaultTags(span, c.options.DefaultTags)
 
@@ -341,6 +352,9 @@ func (s zStmt) Exec(args []driver.Value) (res driver.Result, err error) {
 
 	if s.options.TagQuery {
 		span.Tag("sql.query", s.query)
+		if s.options.TagQueryParams {
+			addParamsTags(span, args)
+		}
 	}
 
 	defer func() {
@@ -352,8 +366,14 @@ func (s zStmt) Exec(args []driver.Value) (res driver.Result, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if s.options.TagAffectedRows {
+		if affectedRows, aRErr := res.RowsAffected(); aRErr != nil {
+			span.Tag("sql.affected_rows", fmt.Sprintf("%d", affectedRows))
+		}
+	}
 
 	res, err = zResult{parent: res, ctx: ctx, tracer: s.tracer, options: s.options}, nil
+
 	return
 }
 
@@ -375,6 +395,9 @@ func (s zStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
 
 	if s.options.TagQuery {
 		span.Tag("sql.query", s.query)
+		if s.options.TagQueryParams {
+			addParamsTags(span, args)
+		}
 	}
 
 	defer func() {
@@ -403,6 +426,9 @@ func (s zStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res d
 
 	if s.options.TagQuery {
 		span.Tag("sql.query", s.query)
+		if s.options.TagQueryParams {
+			addNamedParamsTags(span, args)
+		}
 	}
 
 	setSpanDefaultTags(span, s.options.DefaultTags)
@@ -412,9 +438,8 @@ func (s zStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res d
 	if err != nil {
 		return nil, err
 	}
-
 	if s.options.TagAffectedRows {
-		if affectedRows, err := res.RowsAffected(); err != nil {
+		if affectedRows, aRErr := res.RowsAffected(); aRErr != nil {
 			span.Tag("sql.affected_rows", fmt.Sprintf("%d", affectedRows))
 		}
 	}
@@ -436,6 +461,9 @@ func (s zStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (rows
 
 	if s.options.TagQuery {
 		span.Tag("sql.query", s.query)
+		if s.options.TagQueryParams {
+			addNamedParamsTags(span, args)
+		}
 	}
 
 	setSpanDefaultTags(span, s.options.DefaultTags)
@@ -487,6 +515,52 @@ func (t zTx) Rollback() (err error) {
 	}
 	err = t.parent.Rollback()
 	return
+}
+
+func addParamsTags(span zipkin.Span, args []driver.Value) {
+	for i, arg := range args {
+		key := "sql.arg" + strconv.Itoa(i)
+		span.Tag(key, argToTagValue(arg))
+	}
+}
+
+func addNamedParamsTags(span zipkin.Span, args []driver.NamedValue) {
+	for _, arg := range args {
+		var key string
+		if arg.Name != "" {
+			key = arg.Name
+		} else {
+			key = "sql.arg." + strconv.Itoa(arg.Ordinal)
+		}
+		span.Tag(key, argToTagValue(arg.Value))
+	}
+}
+
+func argToTagValue(val interface{}) string {
+	switch v := val.(type) {
+	case nil:
+		return "NULL"
+	case int64:
+		return fmt.Sprintf("%d", v)
+	case float64:
+		return fmt.Sprintf("%f", v)
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
+	case []byte:
+		if len(v) > 256 {
+			v = v[0:256]
+		}
+		return fmt.Sprintf("%s", v)
+	default:
+		s := fmt.Sprintf("%v", v)
+		if len(s) > 256 {
+			s = s[0:256]
+		}
+		return s
+	}
 }
 
 func setSpanError(span zipkin.Span, err error) {
