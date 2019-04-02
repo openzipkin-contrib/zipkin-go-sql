@@ -7,6 +7,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	zipkin "github.com/openzipkin/zipkin-go"
+	"github.com/openzipkin/zipkin-go/model"
 	zipkinreporter "github.com/openzipkin/zipkin-go/reporter/recorder"
 )
 
@@ -173,6 +174,7 @@ func TestExecContextSuccess(t *testing.T) {
 		{[]TraceOption{WithAllowRootSpan(true), WithRowsAffectedSpan(true)}, 2},
 		{[]TraceOption{WithAllowRootSpan(true), WithLastInsertIDSpan(true), WithRowsAffectedSpan(true)}, 3},
 		{[]TraceOption{WithAllowRootSpan(true), WithLastInsertIDSpan(true), WithRowsAffectedSpan(true), WithTagQuery(true), WithTagQueryParams(true)}, 3},
+		{[]TraceOption{WithAllowRootSpan(true), WithRemoteEndpoint(model.Endpoint{ServiceName: "myservice"})}, 1},
 	}
 	for _, c := range testCases {
 		db, _, recorder := createDB(t, c.opts...)
