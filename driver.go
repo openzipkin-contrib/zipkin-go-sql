@@ -216,7 +216,11 @@ func (c zConn) QueryContext(ctx context.Context, query string, args []driver.Nam
 
 func (c zConn) Prepare(query string) (stmt driver.Stmt, err error) {
 	if c.options.AllowRootSpan {
-		span := c.tracer.StartSpan("sql/prepare")
+		span := c.tracer.StartSpan(
+			"sql/prepare",
+			zipkin.Kind(zipkinmodel.Client),
+			zipkin.RemoteEndpoint(c.options.RemoteEndpoint),
+		)
 
 		if c.options.TagQuery {
 			span.Tag("sql.query", query)
@@ -249,7 +253,12 @@ func (c *zConn) PrepareContext(ctx context.Context, query string) (stmt driver.S
 	var span zipkin.Span
 	setSpanDefaultTags(span, c.options.DefaultTags)
 	if c.options.AllowRootSpan || zipkin.SpanFromContext(ctx) != nil {
-		span, ctx = c.tracer.StartSpanFromContext(ctx, "sql/prepare")
+		span, ctx = c.tracer.StartSpanFromContext(
+			ctx,
+			"sql/prepare",
+			zipkin.Kind(zipkinmodel.Client),
+			zipkin.RemoteEndpoint(c.options.RemoteEndpoint),
+		)
 		if c.options.TagQuery {
 			span.Tag("sql.query", query)
 		}
