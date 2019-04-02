@@ -1,5 +1,9 @@
 package zipkinsql
 
+import (
+	"github.com/openzipkin/zipkin-go/model"
+)
+
 // TraceOption allows for managing zipkinsql configuration using functional options.
 type TraceOption func(o *TraceOptions)
 
@@ -41,6 +45,10 @@ type TraceOptions struct {
 
 	// DefaultTags will be set to each span as default.
 	DefaultTags map[string]string
+
+	// RemoteEndpoint will include the remote endpoint information into the client
+	// span.
+	RemoteEndpoint *model.Endpoint
 }
 
 // WithAllTraceOptions enables all available trace options.
@@ -58,6 +66,7 @@ var AllTraceOptions = TraceOptions{
 	TagQuery:         true,
 	TagQueryParams:   true,
 	TagAffectedRows:  true,
+	RemoteEndpoint:   nil,
 }
 
 // WithOptions sets the zipkinsql tracing middleware options through a single
@@ -125,5 +134,12 @@ func WithTagAffectedRows(b bool) TraceOption {
 func WithDefaultTags(tags map[string]string) TraceOption {
 	return func(o *TraceOptions) {
 		o.DefaultTags = tags
+	}
+}
+
+// WithRemoteEndpoint will be set to each client span
+func WithRemoteEndpoint(e model.Endpoint) TraceOption {
+	return func(o *TraceOptions) {
+		o.RemoteEndpoint = &e
 	}
 }
