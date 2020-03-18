@@ -11,10 +11,10 @@ unit-test:
 
 acceptance-test:
 	docker-compose -f _tests/docker-compose.yml up -d
-	go test --count=1 -v ./_tests || (docker-compose -f _tests/docker-compose.yml stop; exit 1)
+	go test --count=1 -v ./_tests || (docker-compose -f _tests/docker-compose.yml logs; docker-compose -f _tests/docker-compose.yml stop; exit 1)
 	docker-compose -f _tests/docker-compose.yml stop
 
 deps:
-	go get -u -t ./...
+	go get -u ./...
 
 ci: deps vet lint test
