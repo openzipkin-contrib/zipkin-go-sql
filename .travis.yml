@@ -12,6 +12,4 @@ before_script:
   - go get -u golang.org/x/lint/golint
 
 script:
-  - go vet ./...
-  - golint ./..
-  - go test ./...
+  - make ci
