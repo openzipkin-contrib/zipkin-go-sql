@@ -15,6 +15,6 @@ acceptance-test:
 	docker-compose -f _tests/docker-compose.yml stop
 
 deps:
-	go get -u ./...
+	go get -u -t ./...
 
 ci: deps vet lint test
