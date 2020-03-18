@@ -23,13 +23,9 @@ import (
 )
 
 type testCase struct {
-	driverName       string
-	driver           driver.Driver
-	dsn              string
-	createTableQuery string
-	createUserQuery  string
-	getUserQuery     string
-	deleteUserQuery  string
+	driverName string
+	driver     driver.Driver
+	dsn        string
 }
 
 var (
