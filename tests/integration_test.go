@@ -1,6 +1,6 @@
 // build+ ignore
 
-package integration_test
+package integration
 
 import (
 	"context"
@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	zipkinsql "github.com/jcchavezs/zipkin-instrumentation-sql"
+
+	"github.com/go-sql-driver/mysql"
 	"github.com/openzipkin/zipkin-go"
 	"github.com/openzipkin/zipkin-go/reporter/recorder"
 	"gotest.tools/assert"
