@@ -9,7 +9,7 @@ go:
   - master
 
 env:
-  - GO111MODULES=on
+  - GO111MODULE=on
 
 before_script:
   - go get -u golang.org/x/lint/golint
