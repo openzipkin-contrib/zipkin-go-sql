@@ -9,11 +9,10 @@ services:
     ports:
       - "5432:5432"
   mysql:
-    image: mysql/mysql-server
+    image: mysql/mysql-server:8.0.17
     environment:
       MYSQL_USER: test_user
       MYSQL_PASSWORD: test_pass
       MYSQL_DATABASE: test_db
-      MYSQL_ALLOW_EMPTY_PASSWORD: "true"
     ports:
       - "3306:3306"
