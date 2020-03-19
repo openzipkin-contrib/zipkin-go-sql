@@ -59,8 +59,9 @@ func TestDriver(t *testing.T) {
 			sql.Register(driverName, driver)
 			db, err := sql.Open(driverName, tCase.dsn)
 			require.NoError(t, err)
-			db.SetMaxIdleConns(0)
+			db.SetConnMaxLifetime(5 * time.Second)
 			defer db.Close()
+
 			for i := 0; i < maxPingRetries; i++ {
 				if err = db.Ping(); err == nil {
 					break
@@ -68,7 +69,7 @@ func TestDriver(t *testing.T) {
 				if i == maxPingRetries-1 {
 					t.Fatalf("failed to ping the database: %v\n", err)
 				}
-				time.Sleep(time.Duration(i+1) * time.Millisecond)
+				time.Sleep(time.Duration(i+1) * 200 * time.Millisecond)
 			}
 			ctx := context.Background()
 
@@ -97,8 +98,11 @@ func TestSQLX(t *testing.T) {
 
 	db, err := sql.Open(driverName, postgresTestCase.dsn)
 	require.NoError(t, err)
-	db.SetMaxIdleConns(0)
+	db.SetConnMaxLifetime(5 * time.Second)
 	defer db.Close()
+
+	err = db.Ping()
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	dbx := sqlx.NewDb(db, "postgres")
