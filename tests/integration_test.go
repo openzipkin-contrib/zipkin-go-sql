@@ -37,7 +37,7 @@ var (
 	mysqlTestCase = testCase{
 		driverName: "mysql",
 		driver:     &mysql.MySQLDriver{},
-		dsn:        "root@/test_db??interpolateParams=true",
+		dsn:        "root@/test_db?interpolateParams=true",
 	}
 )
 
@@ -45,8 +45,8 @@ const maxPingRetries = 5
 
 func TestDriver(t *testing.T) {
 	tCases := []testCase{
-		postgresTestCase,
 		mysqlTestCase,
+		postgresTestCase,
 	}
 
 	rec := recorder.NewReporter()
@@ -60,6 +60,7 @@ func TestDriver(t *testing.T) {
 			db, err := sql.Open(driverName, tCase.dsn)
 			require.NoError(t, err)
 			db.SetMaxIdleConns(0)
+			defer db.Close()
 			for i := 0; i < maxPingRetries; i++ {
 				if err = db.Ping(); err == nil {
 					break
@@ -97,6 +98,7 @@ func TestSQLX(t *testing.T) {
 	db, err := sql.Open(driverName, postgresTestCase.dsn)
 	require.NoError(t, err)
 	db.SetMaxIdleConns(0)
+	defer db.Close()
 
 	ctx := context.Background()
 	dbx := sqlx.NewDb(db, "postgres")
