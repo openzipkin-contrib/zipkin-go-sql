@@ -37,7 +37,7 @@ var (
 	mysqlTestCase = testCase{
 		driverName: "mysql",
 		driver:     &mysql.MySQLDriver{},
-		dsn:        "test_user:test_pass@/test_db",
+		dsn:        "root@/test_db??interpolateParams=true",
 	}
 )
 
