@@ -1,13 +1,5 @@
 version: "3.7"
 services:
-  postgres:
-    image: postgres:latest
-    environment:
-      POSTGRES_USER: test_user
-      POSTGRES_PASSWORD: test_pass
-      POSTGRES_DB: test_db
-    ports:
-      - "5432:5432"
   mysql:
     image: mysql:latest
     environment:
@@ -17,3 +9,11 @@ services:
       MYSQL_DATABASE: test_db
     ports:
       - "3306:3306"
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_pass
+      POSTGRES_DB: test_db
+    ports:
+      - "5432:5432"
