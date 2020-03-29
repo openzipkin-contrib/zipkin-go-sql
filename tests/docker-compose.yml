@@ -1,14 +1,5 @@
 version: "3.7"
 services:
-  mysql:
-    image: mysql:latest
-    environment:
-      MYSQL_USER: test_user
-      MYSQL_PASSWORD: test_pass
-      MYSQL_ROOT_PASSWORD: test_pass
-      MYSQL_DATABASE: test_db
-    ports:
-      - "3306:3306"
   postgres:
     image: postgres:latest
     environment:

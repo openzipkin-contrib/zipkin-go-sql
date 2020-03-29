@@ -10,7 +10,6 @@ import (
 
 	zipkinsql "github.com/jcchavezs/zipkin-instrumentation-sql"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/openzipkin/zipkin-go"
 	"github.com/openzipkin/zipkin-go/reporter/recorder"
 	"gotest.tools/assert"
@@ -34,18 +33,12 @@ var (
 		driver:     &pq.Driver{},
 		dsn:        "postgres://test_user:test_pass@localhost/test_db?sslmode=disable",
 	}
-	mysqlTestCase = testCase{
-		driverName: "mysql",
-		driver:     &mysql.MySQLDriver{},
-		dsn:        "test_user:test_pass@tcp(127.0.0.1:3306)/test_db?interpolateParams=true",
-	}
 )
 
 const maxPingRetries = 5
 
 func TestDriver(t *testing.T) {
 	tCases := []testCase{
-		mysqlTestCase,
 		postgresTestCase,
 	}
 
