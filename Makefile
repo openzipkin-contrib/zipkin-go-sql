@@ -15,7 +15,4 @@ acceptance-test:
 	go test --count=1 -v ./tests || (sleep 2; docker-compose -f tests/docker-compose.yml logs; docker-compose -f tests/docker-compose.yml stop; exit 1)
 	docker-compose -f tests/docker-compose.yml stop
 
-deps:
-	go get -v ./...
-
-ci: deps vet lint test
+ci: vet lint test

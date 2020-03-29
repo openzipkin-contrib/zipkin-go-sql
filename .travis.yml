@@ -16,7 +16,9 @@ env:
 
 before_script:
   - go get -u golang.org/x/lint/golint
-  - go get -u github.com/stretchr/testify
+
+install:
+  - go get -d -t ./...
 
 script:
   - make ci
