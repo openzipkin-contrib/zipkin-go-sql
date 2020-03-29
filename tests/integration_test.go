@@ -12,13 +12,11 @@ import (
 
 	"github.com/openzipkin/zipkin-go"
 	"github.com/openzipkin/zipkin-go/reporter/recorder"
-	"gotest.tools/assert"
 
 	"database/sql/driver"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
-	"github.com/stretchr/testify/require"
 )
 
 type testCase struct {
@@ -51,7 +49,10 @@ func TestDriver(t *testing.T) {
 			driverName := "traced-" + tCase.driverName
 			sql.Register(driverName, driver)
 			db, err := sql.Open(driverName, tCase.dsn)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("failed to open a DB: %v\n", err)
+			}
+
 			db.SetConnMaxLifetime(5 * time.Second)
 			defer db.Close()
 
@@ -68,16 +69,27 @@ func TestDriver(t *testing.T) {
 
 			row := db.QueryRowContext(ctx, "SELECT 1")
 			res := 0
-			err = row.Scan(&res)
-			require.NoError(t, err)
-			assert.Equal(t, 1, res)
+			if err := row.Scan(&res); err != nil {
+				t.Fatalf("failed to scan the result: %v\n", err)
+			}
+
+			if want, have := 1, res; want != have {
+				t.Errorf("incorrect result: want %d, have: %d", want, have)
+			}
 
 			spans := rec.Flush()
-			assert.Equal(t, 1, len(spans))
+			if want, have := 1, len(spans); want != have {
+				t.Errorf("incorrect number of spans: want %d, have: %d", want, have)
+			}
 
 			s := spans[0]
-			assert.Equal(t, "sql/query", s.Name)
-			assert.Equal(t, "SELECT 1", s.Tags["sql.query"])
+			if want, have := "sql/query", s.Name; want != have {
+				t.Errorf("incorrect span name: want %q, have: %q", want, have)
+			}
+
+			if want, have := "SELECT 1", s.Tags["sql.query"]; want != have {
+				t.Errorf("incorrect tag: want %q, have: %q", want, have)
+			}
 		})
 	}
 }
@@ -87,27 +99,46 @@ func TestSQLX(t *testing.T) {
 	tracer, _ := zipkin.NewTracer(rec, zipkin.WithSampler(zipkin.AlwaysSample))
 
 	driverName, err := zipkinsql.Register("postgres", tracer, zipkinsql.WithAllTraceOptions())
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("failed to register the driver: %v\n", err)
+	}
 
 	db, err := sql.Open(driverName, postgresTestCase.dsn)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("failed to open a DB: %v\n", err)
+	}
+
 	db.SetConnMaxLifetime(5 * time.Second)
 	defer db.Close()
 
 	err = db.Ping()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("failed to ping the database: %v\n", err)
+	}
 
 	ctx := context.Background()
 	dbx := sqlx.NewDb(db, "postgres")
 	row := dbx.QueryRowContext(ctx, "SELECT 2")
 	res := 0
-	err = row.Scan(&res)
-	require.NoError(t, err)
-	assert.Equal(t, 2, res)
+	if err := row.Scan(&res); err != nil {
+		t.Fatalf("failed to scan the result: %v\n", err)
+	}
+
+	if want, have := 2, res; want != have {
+		t.Errorf("incorrect result: want %d, have: %d", want, have)
+	}
+
 	spans := rec.Flush()
-	assert.Equal(t, 1, len(spans))
+	if want, have := 1, len(spans); want != have {
+		t.Errorf("incorrect number of spans: want %d, have: %d", want, have)
+	}
 
 	s := spans[0]
-	assert.Equal(t, "sql/query", s.Name)
-	assert.Equal(t, "SELECT 2", s.Tags["sql.query"])
+	if want, have := "sql/query", s.Name; want != have {
+		t.Errorf("incorrect span name of spans: want %q, have: %q", want, have)
+	}
+
+	if want, have := "SELECT 2", s.Tags["sql.query"]; want != have {
+		t.Errorf("incorrect tag: want %q, have: %q", want, have)
+	}
 }
