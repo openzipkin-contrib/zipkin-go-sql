@@ -80,7 +80,7 @@ func initializeConn(...) driver.Conn {
 }
 ```
 
-Go 1.10+ provides a new driver.Connector interface that can be 
+Go 1.10+ provides a new driver.Connector interface that can be
 wrapped  directly by zipkinsql without the need for zipkinsql to
 register a driver.Driver.
 
@@ -102,7 +102,7 @@ connector, err = pq.NewConnector("postgres://user:pass@host:5432/db")
 if err != nil {
     log.Fatalf("unable to create postgres connector: %v\n", err)
 }
-// Wrap the driver.Connector with ocsql.
+// Wrap the driver.Connector with zipkinsql.
 connector = zipkinsql.WrapConnector(connector, tracer, zipkinsql.WithAllTraceOptions())
 // Use the wrapped driver.Connector.
 db = sql.OpenDB(connector)
