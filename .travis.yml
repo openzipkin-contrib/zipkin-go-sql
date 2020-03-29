@@ -1,3 +1,6 @@
+services:
+  - docker
+
 sudo: false
 language: go
 go:
@@ -8,10 +11,14 @@ go:
   - 1.13.x
   - master
 
+env:
+  - GO111MODULE=on
+
 before_script:
   - go get -u golang.org/x/lint/golint
 
+install:
+  - go get -d -t ./...
+
 script:
-  - go vet ./...
-  - golint ./..
-  - go test ./...
+  - make ci

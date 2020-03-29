@@ -69,7 +69,6 @@ db, err = sql.Open("zipkinsql-mysql", "postgres://user:pass@127.0.0.1:5432/db")
 Projects providing their own abstractions on top of database/sql/driver can also wrap an existing driver.Conn interface directly with zipkinsql.
 
 ```go
-
 import zipkinsql "github.com/jcchavezs/zipkin-instrumentation-sql"
 
 func initializeConn(...) driver.Conn {
@@ -81,11 +80,12 @@ func initializeConn(...) driver.Conn {
 }
 ```
 
-Go 1.10+ provides a new driver.Connector interface that can be 
+Go 1.10+ provides a new driver.Connector interface that can be
 wrapped  directly by zipkinsql without the need for zipkinsql to
 register a driver.Driver.
 
 Example:
+
 ```go
 import(
     zipkinsql "github.com/jcchavezs/zipkin-instrumentation-sql"
@@ -102,10 +102,28 @@ connector, err = pq.NewConnector("postgres://user:pass@host:5432/db")
 if err != nil {
     log.Fatalf("unable to create postgres connector: %v\n", err)
 }
-// Wrap the driver.Connector with ocsql.
+// Wrap the driver.Connector with zipkinsql.
 connector = zipkinsql.WrapConnector(connector, tracer, zipkinsql.WithAllTraceOptions())
 // Use the wrapped driver.Connector.
 db = sql.OpenDB(connector)
+```
+
+## Using jmoiron/sqlx
+
+If using the `sqlx` library with named queries you will need to use the
+`sqlx.NewDb` function to wrap an existing `*sql.DB` connection. `sqlx.Open` and `sqlx.Connect` methods won't work.
+
+First create a `*sql.DB` connection and then create a `*sqlx.DB` connection by wrapping the former and **keeping the same driver name** e.g.:
+
+```go
+driverName, err := zipkinsql.Register("postgres", zipkinsql.WithAllTraceOptions())
+if err != nil { ... }
+
+db, err := sql.Open(driverName, "postgres://localhost:5432/my_database")
+if err != nil { ... }
+
+// Keep the driver name!
+dbx := sqlx.NewDB(db, "postgres")
 ```
 
 ## Usage of *Context methods
