@@ -1,8 +1,8 @@
 # Zipkin instrumentation SQL
 
-[![Build Status](https://travis-ci.com/jcchavezs/zipkin-instrumentation-sql.svg?branch=master)](https://travis-ci.com/jcchavezs/zipkin-instrumentation-sql)
-[![Go Report Card](https://goreportcard.com/badge/github.com/jcchavezs/zipkin-instrumentation-sql)](https://goreportcard.com/report/github.com/jcchavezs/zipkin-instrumentation-sql)
-[![GoDoc](https://godoc.org/github.com/jcchavezs/zipkin-instrumentation-sql?status.svg)](https://godoc.org/github.com/jcchavezs/zipkin-instrumentation-sql)
+[![Build Status](https://travis-ci.com/openzipkin-contrib/zipkin-go-sql.svg?branch=master)](https://travis-ci.com/openzipkin-contrib/zipkin-go-sql)
+[![Go Report Card](https://goreportcard.com/badge/github.com/openzipkin-contrib/zipkin-go-sql)](https://goreportcard.com/report/github.com/openzipkin-contrib/zipkin-go-sql)
+[![GoDoc](https://godoc.org/github.com/openzipkin-contrib/zipkin-go-sql?status.svg)](https://godoc.org/github.com/openzipkin-contrib/zipkin-go-sql)
 
 A SQL wrapper including Zipkin instrumentation
 
@@ -11,7 +11,7 @@ A SQL wrapper including Zipkin instrumentation
 ```go
 import (
     _ "github.com/go-sql-driver/mysql"
-    zipkinsql "github.com/jcchavezs/zipkin-instrumentation-sql"
+    zipkinsql "github.com/openzipkin-contrib/zipkin-go-sql"
     zipkin "github.com/openzipkin/zipkin-go"
 )
 
@@ -38,7 +38,7 @@ You can also wrap your own driver with zipkin instrumentation as follows:
 
 import (
     mysql "github.com/go-sql-driver/mysql"
-    zipkinsql "github.com/jcchavezs/zipkin-instrumentation-sql"
+    zipkinsql "github.com/openzipkin-contrib/zipkin-go-sql"
     zipkinmodel "github.com/openzipkin/zipkin-go/model"
 )
 
@@ -69,7 +69,7 @@ db, err = sql.Open("zipkinsql-mysql", "postgres://user:pass@127.0.0.1:5432/db")
 Projects providing their own abstractions on top of database/sql/driver can also wrap an existing driver.Conn interface directly with zipkinsql.
 
 ```go
-import zipkinsql "github.com/jcchavezs/zipkin-instrumentation-sql"
+import zipkinsql "github.com/openzipkin-contrib/zipkin-go-sql"
 
 func initializeConn(...) driver.Conn {
     // create custom driver.Conn
@@ -88,7 +88,7 @@ Example:
 
 ```go
 import(
-    zipkinsql "github.com/jcchavezs/zipkin-instrumentation-sql"
+    zipkinsql "github.com/openzipkin-contrib/zipkin-go-sql"
     "github.com/lib/pq"
 )
 var (

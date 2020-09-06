@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	zipkinsql "github.com/jcchavezs/zipkin-instrumentation-sql"
+	zipkinsql "github.com/openzipkin-contrib/zipkin-go-sql"
 
 	"github.com/openzipkin/zipkin-go"
 	"github.com/openzipkin/zipkin-go/reporter/recorder"
