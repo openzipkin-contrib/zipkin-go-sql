@@ -1,6 +1,6 @@
 # Zipkin instrumentation SQL
 
-[![Build Status](https://travis-ci.com/openzipkin-contrib/zipkin-go-sql.svg?branch=master)](https://travis-ci.com/openzipkin-contrib/zipkin-go-sql)
+[![Build Status](https://travis-ci.org/openzipkin-contrib/zipkin-go-sql.svg?branch=master)](https://travis-ci.org/openzipkin-contrib/zipkin-go-sql)
 [![Go Report Card](https://goreportcard.com/badge/github.com/openzipkin-contrib/zipkin-go-sql)](https://goreportcard.com/report/github.com/openzipkin-contrib/zipkin-go-sql)
 [![GoDoc](https://godoc.org/github.com/openzipkin-contrib/zipkin-go-sql?status.svg)](https://godoc.org/github.com/openzipkin-contrib/zipkin-go-sql)
 
