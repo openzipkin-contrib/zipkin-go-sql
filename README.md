@@ -29,7 +29,7 @@ if err != nil {
 }
 
 // Connect to a MySQL database using the zipkinsql driver wrapper.
-db, err = sql.Open(driverName, "postgres://user:pass@127.0.0.1:5432/db")
+db, err = sql.Open(driverName, "mysql://user:pass@127.0.0.1:3306/db")
 ```
 
 You can also wrap your own driver with zipkin instrumentation as follows:
@@ -63,7 +63,7 @@ driver = zipkinsql.Wrap(
 sql.Register("zipkinsql-mysql", driver)
 
 // Connect to a MySQL database using the zipkinsql driver wrapper
-db, err = sql.Open("zipkinsql-mysql", "postgres://user:pass@127.0.0.1:5432/db")
+db, err = sql.Open("zipkinsql-mysql", "mysql://user:pass@127.0.0.1:3306/db")
 ```
 
 Projects providing their own abstractions on top of database/sql/driver can also wrap an existing driver.Conn interface directly with zipkinsql.
