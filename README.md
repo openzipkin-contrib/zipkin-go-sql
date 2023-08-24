@@ -123,7 +123,7 @@ db, err := sql.Open(driverName, "postgres://localhost:5432/my_database")
 if err != nil { ... }
 
 // Keep the driver name!
-dbx := sqlx.NewDB(db, "postgres")
+dbx := sqlx.NewDb(db, "postgres")
 ```
 
 ## Usage of *Context methods
